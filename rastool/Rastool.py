@@ -26,6 +26,8 @@ from PyQt5.QtCore import  *
 from qgis.PyQt.QtGui import QIcon, QColor, QFont
 from qgis.PyQt.QtWidgets import QAction
 from PyQt5.QtWidgets import QMessageBox
+from qgis.PyQt.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QFileDialog, QDockWidget
+from qgis.PyQt.QtGui import QPixmap
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -174,7 +176,13 @@ class rastool:
             parent=self.iface.mainWindow())
         
         # will be set False in run()
-        self.first_start = True                 
+        self.first_start = True
+        self.png_Pisa = self.plugin_dir + os.sep + "rastool_logo.png"
+        self.icona_Unipi = QPixmap(self.png_Pisa)
+        self.icona_Unipi = self.icona_Unipi.scaled(100, 12, QtCore.Qt.KeepAspectRatio)
+        self.png_Impact = self.plugin_dir + os.sep + "rastool.png"
+        self.icona_Impact = QPixmap(self.png_Impact)
+        self.icona_Impact = self.icona_Impact.scaled(41, 41, QtCore.Qt.KeepAspectRatio)
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
@@ -245,7 +253,97 @@ class rastool:
         joinObject.setJoinLayer(input)
         target.addJoin(joinObject)
 
-		
+    def joinadacritical(self,adaLayer,exposedelements):
+        #Join ADA layer to EXPOSED_CRITICAL_ELEMENTS layer using ADA_ID field
+        # Get input (area) and target (ADA layer) layers
+        target=adaLayer
+        input=exposedelements
+        # Set properties for the join
+        targetField='ADA_ID'
+        inputField='ADA_ID'
+        joinObject = QgsVectorLayerJoinInfo()
+        joinObject.setJoinFieldName('ADA_ID')
+        joinObject.setTargetFieldName('ADA_ID')
+        joinObject.setJoinLayerId = input.id()
+        joinObject.setUsingMemoryCache(True)
+        joinObject.setJoinLayer(input)
+        target.addJoin(joinObject)
+
+    def gravar(self,adaLayer):
+        #print(self.dlg.output.filePath())
+        if self.dlg.output.filePath() != '':
+
+            import os
+            if os.path.exists(self.dlg.output.filePath()):
+
+                #shape = self.dlg.layerComboBox.currentLayer()
+                shape = adaLayer
+                print (shape)
+                ruta = self.dlg.output.filePath()
+                options = QgsVectorFileWriter.SaveVectorOptions()
+                options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteFile
+                options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteLayer
+                options.actionOnExistingFile = QgsVectorFileWriter.AppendToLayerNoNewFields  
+                #options.shape = "_".join(shape.name().split(' '))
+                writer = QgsVectorFileWriter.writeAsVectorFormat(shape,ruta,options)
+                layer = QgsVectorLayer(ruta, os.path.basename(ruta), "ogr")
+                provider = layer.dataProvider()
+                print (provider)
+                field_ids = []
+                # Fieldnames to keep
+                fieldnames = set(['ADA_ID','EXPOSITION','MAGNITUDE','IMPACT'])
+                for field in layer.fields():
+                    print (field.name())
+                    if field.name() not in fieldnames:
+                      field_ids.append(layer.fields().indexFromName(field.name()))
+
+                # Delete the fields in the attribute table through their corresponding index 
+                # in the list.
+                layer.dataProvider().deleteAttributes(field_ids)
+                layer.updateFields()
+                
+                # Add impact output layer to project
+                QgsProject.instance().addMapLayer(layer)
+                layer.loadNamedStyle(QgsApplication.qgisSettingsDirPath()+'python/plugins/rastool/impact.qml')
+                layer.triggerRepaint()           
+            else:
+                shape = adaLayer
+                print ('Escreveu via else')
+                ruta = self.dlg.output.filePath()
+                writer = QgsVectorFileWriter.writeAsVectorFormat(shape,ruta,"UTF-8",shape.crs(),driverName="ESRI Shapefile")
+                layer = QgsVectorLayer(ruta, os.path.basename(ruta), "ogr")
+                provider = layer.dataProvider()
+                field_ids = []
+                # Fieldnames to keep
+                fieldnames = set(['ADA_ID','EXPOSITION','MAGNITUDE','IMPACT'])
+                for field in layer.fields():
+                    print (field.name())
+                    if field.name() not in fieldnames:
+                      field_ids.append(layer.fields().indexFromName(field.name()))
+ 
+                # Delete the fields in the attribute table through their corresponding index 
+                # in the list.
+                layer.dataProvider().deleteAttributes(field_ids)
+                layer.updateFields()
+                
+                # Add impact output layer to project
+                QgsProject.instance().addMapLayer(layer)
+                layer.loadNamedStyle(QgsApplication.qgisSettingsDirPath()+'python/plugins/rastool/impact.qml')
+                layer.triggerRepaint()
+
+#1 PROCESS MAGNITUDE (ADA Size_Velocity_Temporal trend)
+#1 Temporal trend linear (negative; positive)           
+    #def calculaMagnitude1(self):
+
+#2 PROCESS MAGNITUDE (ADA Size_Velocity_Temporal trend)
+#2 Temporal trend with incresing velocity           
+    #def calculaMagnitude2(self):
+
+#3 PROCESS MAGNITUDE (ADA Size_Velocity_Temporal trend)
+#3 Process: subsidence ; setlement
+#3 Temporal trend negative exponential          
+    #def calculaMagnitude3(self):
+	
     def run(self):
         """Run method that performs all the real work"""
 
@@ -254,6 +352,8 @@ class rastool:
         if self.first_start == True:
             self.first_start = False
             self.dlg = rastoolDialog()
+            self.dlg.RASlogo.setPixmap(self.icona_Unipi)
+            self.dlg.Impactlogo.setPixmap(self.icona_Impact)
             
         self.dlg.layerComboBox.clear()
         layers = QgsProject.instance().mapLayers().values()
@@ -303,7 +403,26 @@ class rastool:
                 self.tr("No line layer in actual project"),
                 level=Qgis.Warning)
             return            
-          
+        # fill selection combo, only polygon layers
+        n = 0        
+        self.dlg.criticalcomboBox.clear() 
+        for layer in layers:
+            if layer.type() == QgsMapLayer.VectorLayer and \
+                layer.geometryType() == QgsWkbTypes.PolygonGeometry:
+                self.dlg.criticalcomboBox.addItem( layer.name(), layer )
+                n += 1
+
+        if n == 0:  # no polygon layer
+            self.iface.messageBar().pushMessage(self.tr("Warning"),
+                self.tr("No polygon layer in actual project"),
+                level=Qgis.Warning)
+            return 
+
+        
+        self.dlg.output.setStorageMode(self.dlg.output.SaveFile)
+        self.dlg.output.setConfirmOverwrite(True)
+        self.dlg.output.setFilter(self.tr("ESRI Shapefile (*.shp *.SHP)"))
+        
         # show the dialog
         self.dlg.show()
 
@@ -330,6 +449,9 @@ class rastool:
             index5 = self.dlg.railwaycomboBox.currentIndex()
             railwayLayer = self.dlg.railwaycomboBox.itemData(index5)
             print (railwayLayer.source())
+            index6 = self.dlg.criticalcomboBox.currentIndex()
+            criticalLayer = self.dlg.criticalcomboBox.itemData(index6)
+            print (criticalLayer.source())
             
             # Calculate population for each ADA.
             self.adaidupdate(adaLayer)# update id field
@@ -347,9 +469,7 @@ class rastool:
                 }
             self.dlg.progressBar.setValue(25)
             result2 = processing.run("qgis:zonalstatistics", params2)            
-            #print(self.dlg.mQgsFileWidget.filePath())
-            #outputrail = self.dlg.mQgsFileWidget.filePath() + '\sumrailway.shp'
-            #print(outputrail)
+
             params3 = {'LINES':roadsLayer.source(),
                 'POLYGONS':adaLayer.source(),
                 'LEN_FIELD':'LENROAD','COUNT_FIELD':'COUNTROAD','OUTPUT':'memory:{}'.format('roadssumcount')
@@ -368,6 +488,18 @@ class rastool:
             sumlinelengths2 = result4['OUTPUT']
             QgsProject.instance().addMapLayer(sumlinelengths2)
             self.joinadarailway(adaLayer,sumlinelengths2)#Performs join adaLayer.ID with railsumcount.ID
+            # INSERIR AQUI A INTERSEÇÃO COM OS ELEMENTOS EXPOSTOS CRÍTICOS
+            ##############################################################
+            params5 = {'INPUT':adaLayer.source(),
+                'OVERLAY':criticalLayer.source(),
+                'INPUT_FIELDS':['ADA_ID','AREA','TS_CLASS'],'OVERLAY_FIELDS':[],'OUTPUT':'memory:{}'.format('adacriticalintersection')
+                }           
+            result5 = processing.run("qgis:intersection", params5)
+            #self.dlg.progressBar.setValue(50)
+            exposedelements = result5['OUTPUT']
+            QgsProject.instance().addMapLayer(exposedelements)
+            self.joinadacritical(adaLayer,exposedelements)#Performs join adaLayer.ADA_ID with railsumcount.ADA_ID            
+                        
             #Check for existing EXPOSITION field | add or delete EXPOSITION field
             field_name = "EXPOSITION"
             layer = adaLayer # Gives you the ADA layer
@@ -392,6 +524,13 @@ class rastool:
             layer = adaLayer
             with edit(layer): # open edti sessio for the layer
                 for feature in layer.getFeatures():
+                    #Check none values from critical exposed elements intersection and converts them to zero or one
+                    critical_n = 0
+                    if feature['adacriticalintersection_TS_CLASS'] is None:
+                        critical_n = 0
+                    else:
+                        critical_n = 1
+                        print("adacriticalintersection_TS_CLASS: 1")
                     # condition 1 POP 0-10 x BUILDINGS
                     if (feature['P_sum'] >= 0 and feature['P_sum'] < 10) and (feature['B_sum'] >= 0 and feature['B_sum'] < 100):
                         feature['EXPOSITION'] = 1
@@ -400,14 +539,14 @@ class rastool:
                     elif (feature['P_sum'] >= 0 and feature['P_sum'] < 10) and (feature['B_sum'] >= 1000):
                         feature['EXPOSITION'] = 2
                     # condition 2 POP 10-100 x BUILDINGS
-                    if (feature['P_sum'] >= 10 and feature['P_sum'] < 100) and (feature['B_sum'] >= 0 and feature['B_sum'] < 100):
+                    elif (feature['P_sum'] >= 10 and feature['P_sum'] < 100) and (feature['B_sum'] >= 0 and feature['B_sum'] < 100):
                         feature['EXPOSITION'] = 2
                     elif (feature['P_sum'] >= 10 and feature['P_sum'] < 100) and (feature['B_sum'] >= 100 and feature['B_sum'] < 1000):
                         feature['EXPOSITION'] = 2
                     elif (feature['P_sum'] >= 10 and feature['P_sum'] < 100) and (feature['B_sum'] >= 1000):
                         feature['EXPOSITION'] = 3
                     # condition 3 POP >1000 x BUILDINGS
-                    if (feature['P_sum'] >= 100) and (feature['B_sum'] >= 0 and feature['B_sum'] < 100):
+                    elif (feature['P_sum'] >= 100) and (feature['B_sum'] >= 0 and feature['B_sum'] < 100):
                         feature['EXPOSITION'] = 3
                     elif (feature['P_sum'] >= 100) and (feature['B_sum'] >= 100 and feature['B_sum'] < 1000):
                         feature['EXPOSITION'] = 3
@@ -415,25 +554,25 @@ class rastool:
                         feature['EXPOSITION'] = 3
                     #conditions with critical roads and/or railway within ADA
                     # condition 1 POP 0-10 x BUILDINGS                    
-                    if (feature['roadssumcount_COUNTROAD'] + feature['railsumcount_COUNTRAIL'] > 0) and (feature['P_sum'] >= 0 and feature['P_sum'] < 10) and (feature['B_sum'] >= 0 and feature['B_sum'] < 100):
+                    elif (feature['roadssumcount_COUNTROAD'] + feature['railsumcount_COUNTRAIL'] + critical_n > 0) and (feature['P_sum'] >= 0 and feature['P_sum'] < 10) and (feature['B_sum'] >= 0 and feature['B_sum'] < 100):
                         feature['EXPOSITION'] = 2
-                    elif (feature['roadssumcount_COUNTROAD'] + feature['railsumcount_COUNTRAIL'] > 0) and (feature['P_sum'] >= 0 and feature['P_sum'] < 10) and (feature['B_sum'] >= 100 and feature['B_sum'] < 1000):
+                    elif (feature['roadssumcount_COUNTROAD'] + feature['railsumcount_COUNTRAIL'] + critical_n > 0) and (feature['P_sum'] >= 0 and feature['P_sum'] < 10) and (feature['B_sum'] >= 100 and feature['B_sum'] < 1000):
                         feature['EXPOSITION'] = 2
-                    elif (feature['roadssumcount_COUNTROAD'] + feature['railsumcount_COUNTRAIL'] > 0) and (feature['P_sum'] >= 0 and feature['P_sum'] < 10) and (feature['B_sum'] >= 1000):
+                    elif (feature['roadssumcount_COUNTROAD'] + feature['railsumcount_COUNTRAIL'] + critical_n > 0) and (feature['P_sum'] >= 0 and feature['P_sum'] < 10) and (feature['B_sum'] >= 1000):
                         feature['EXPOSITION'] = 3
                     # condition 2 POP 10-100 x BUILDINGS
-                    if (feature['roadssumcount_COUNTROAD'] + feature['railsumcount_COUNTRAIL'] > 0) and (feature['P_sum'] >= 10 and feature['P_sum'] < 100) and (feature['B_sum'] >= 0 and feature['B_sum'] < 100):
+                    elif (feature['roadssumcount_COUNTROAD'] + feature['railsumcount_COUNTRAIL'] + critical_n > 0) and (feature['P_sum'] >= 10 and feature['P_sum'] < 100) and (feature['B_sum'] >= 0 and feature['B_sum'] < 100):
                         feature['EXPOSITION'] = 3
-                    elif (feature['roadssumcount_COUNTROAD'] + feature['railsumcount_COUNTRAIL'] > 0) and (feature['P_sum'] >= 10 and feature['P_sum'] < 100) and (feature['B_sum'] >= 100 and feature['B_sum'] < 1000):
+                    elif (feature['roadssumcount_COUNTROAD'] + feature['railsumcount_COUNTRAIL'] + critical_n > 0) and (feature['P_sum'] >= 10 and feature['P_sum'] < 100) and (feature['B_sum'] >= 100 and feature['B_sum'] < 1000):
                         feature['EXPOSITION'] = 3
-                    elif (feature['roadssumcount_COUNTROAD'] + feature['railsumcount_COUNTRAIL'] > 0) and (feature['P_sum'] >= 10 and feature['P_sum'] < 100) and (feature['B_sum'] >= 1000):
+                    elif (feature['roadssumcount_COUNTROAD'] + feature['railsumcount_COUNTRAIL'] + critical_n > 0) and (feature['P_sum'] >= 10 and feature['P_sum'] < 100) and (feature['B_sum'] >= 1000):
                         feature['EXPOSITION'] = 3
                     # condition 3 POP >1000 x BUILDINGS
-                    if (feature['roadssumcount_COUNTROAD'] + feature['railsumcount_COUNTRAIL'] > 0) and (feature['P_sum'] >= 100) and (feature['B_sum'] >= 0 and feature['B_sum'] < 100):
+                    elif (feature['roadssumcount_COUNTROAD'] + feature['railsumcount_COUNTRAIL'] + critical_n > 0) and (feature['P_sum'] >= 100) and (feature['B_sum'] >= 0 and feature['B_sum'] < 100):
                         feature['EXPOSITION'] = 3
-                    elif (feature['roadssumcount_COUNTROAD'] + feature['railsumcount_COUNTRAIL'] > 0) and (feature['P_sum'] >= 100) and (feature['B_sum'] >= 100 and feature['B_sum'] < 1000):
+                    elif (feature['roadssumcount_COUNTROAD'] + feature['railsumcount_COUNTRAIL'] + critical_n > 0) and (feature['P_sum'] >= 100) and (feature['B_sum'] >= 100 and feature['B_sum'] < 1000):
                         feature['EXPOSITION'] = 3
-                    elif (feature['roadssumcount_COUNTROAD'] + feature['railsumcount_COUNTRAIL'] > 0) and (feature['P_sum'] >= 100) and (feature['B_sum'] >= 1000):
+                    elif (feature['roadssumcount_COUNTROAD'] + feature['railsumcount_COUNTRAIL'] + critical_n > 0) and (feature['P_sum'] >= 100) and (feature['B_sum'] >= 1000):
                         feature['EXPOSITION'] = 3       
                     # update feature values
                     layer.updateFeature(feature)
@@ -461,27 +600,103 @@ class rastool:
             # Calculate process magnitude
             with edit(layer): # open edti sessio for the layer
                 for feature in layer.getFeatures():
+                    processos = str(feature['PROCESSES'])
+                    #x = processos.find('LAN')
+                    #print("Processos:", x) 
+                    if feature['TS_CLASS'] == 3:
+                    #matriz 2
                     # condition 1 SIZE 0-10000 x VELOCITY
-                    if (feature['AREA'] >= 0 and feature['AREA'] < 10000) and (feature['V_MEAN_ABS'] >= 0 and feature['V_MEAN_ABS'] < 16):
-                        feature['MAGNITUDE'] = 1
-                    elif (feature['AREA'] >= 0 and feature['AREA'] < 10000) and (feature['V_MEAN_ABS'] >= 16 and feature['V_MEAN_ABS'] < 32):
-                        feature['MAGNITUDE'] = 2
-                    elif (feature['AREA'] >= 0 and feature['AREA'] < 10000) and (feature['V_MEAN_ABS'] >= 32):
-                        feature['MAGNITUDE'] = 2
-                    # condition 2 SIZE 10000-100000 x VELOCITY
-                    if (feature['AREA'] >= 10000 and feature['AREA'] < 100000) and (feature['V_MEAN_ABS'] >= 0 and feature['V_MEAN_ABS'] < 16):
-                        feature['MAGNITUDE'] = 1
-                    elif (feature['AREA'] >= 10000 and feature['AREA'] < 100000) and (feature['V_MEAN_ABS'] >= 16 and feature['V_MEAN_ABS'] < 32):
-                        feature['MAGNITUDE'] = 2
-                    elif (feature['AREA'] >= 10000 and feature['AREA'] < 100000) and (feature['V_MEAN_ABS'] >= 32):
-                        feature['MAGNITUDE'] = 3
-                    # condition 3 SIZE >100000 x VELOCITY
-                    if (feature['AREA'] >= 100000 and feature['AREA'] < 100000) and (feature['V_MEAN_ABS'] >= 0 and feature['V_MEAN_ABS'] < 16):
-                        feature['MAGNITUDE'] = 2
-                    elif (feature['AREA'] >= 100000 and feature['AREA'] < 100000) and (feature['V_MEAN_ABS'] >= 16 and feature['V_MEAN_ABS'] < 32):
-                        feature['MAGNITUDE'] = 3
-                    elif (feature['AREA'] >= 100000 and feature['AREA'] < 100000) and (feature['V_MEAN_ABS'] >= 32):
-                        feature['MAGNITUDE'] = 3
+                        if (feature['AREA'] >= 0 and feature['AREA'] < 10000) and (feature['V_MEAN_ABS'] >= 0 and feature['V_MEAN_ABS'] < 16):
+                            feature['MAGNITUDE'] = 2
+                        elif (feature['AREA'] >= 0 and feature['AREA'] < 10000) and (feature['V_MEAN_ABS'] >= 16 and feature['V_MEAN_ABS'] < 32):
+                            feature['MAGNITUDE'] = 3
+                        elif (feature['AREA'] >= 0 and feature['AREA'] < 10000) and (feature['V_MEAN_ABS'] >= 32):
+                            feature['MAGNITUDE'] = 3
+                        # condition 2 SIZE 10000-100000 x VELOCITY
+                        elif (feature['AREA'] >= 10000 and feature['AREA'] < 100000) and (feature['V_MEAN_ABS'] >= 0 and feature['V_MEAN_ABS'] < 16):
+                            feature['MAGNITUDE'] = 2
+                        elif (feature['AREA'] >= 10000 and feature['AREA'] < 100000) and (feature['V_MEAN_ABS'] >= 16 and feature['V_MEAN_ABS'] < 32):
+                            feature['MAGNITUDE'] = 3
+                        elif (feature['AREA'] >= 10000 and feature['AREA'] < 100000) and (feature['V_MEAN_ABS'] >= 32):
+                            feature['MAGNITUDE'] = 3
+                        # condition 3 SIZE >100000 x VELOCITY
+                        elif (feature['AREA'] >= 100000) and (feature['V_MEAN_ABS'] >= 0 and feature['V_MEAN_ABS'] < 16):
+                            feature['MAGNITUDE'] = 3
+                        elif (feature['AREA'] >= 100000) and (feature['V_MEAN_ABS'] >= 16 and feature['V_MEAN_ABS'] < 32):
+                            feature['MAGNITUDE'] = 3
+                        elif (feature['AREA'] >= 100000) and (feature['V_MEAN_ABS'] >= 32):
+                            feature['MAGNITUDE'] = 3
+                    elif feature['TS_CLASS'] == 2:
+                    # aplica-se a matriz 1
+                    # condition 1 SIZE 0-10000 x VELOCITY
+                        if (feature['AREA'] >= 0 and feature['AREA'] < 10000) and (feature['V_MEAN_ABS'] >= 0 and feature['V_MEAN_ABS'] < 16):
+                            feature['MAGNITUDE'] = 1
+                        elif (feature['AREA'] >= 0 and feature['AREA'] < 10000) and (feature['V_MEAN_ABS'] >= 16 and feature['V_MEAN_ABS'] < 32):
+                            feature['MAGNITUDE'] = 2
+                        elif (feature['AREA'] >= 0 and feature['AREA'] < 10000) and (feature['V_MEAN_ABS'] >= 32):
+                            feature['MAGNITUDE'] = 2
+                        # condition 2 SIZE 10000-100000 x VELOCITY
+                        elif (feature['AREA'] >= 10000 and feature['AREA'] < 100000) and (feature['V_MEAN_ABS'] >= 0 and feature['V_MEAN_ABS'] < 16):
+                            feature['MAGNITUDE'] = 1
+                        elif (feature['AREA'] >= 10000 and feature['AREA'] < 100000) and (feature['V_MEAN_ABS'] >= 16 and feature['V_MEAN_ABS'] < 32):
+                            feature['MAGNITUDE'] = 2
+                        elif (feature['AREA'] >= 10000 and feature['AREA'] < 100000) and (feature['V_MEAN_ABS'] >= 32):
+                            feature['MAGNITUDE'] = 3
+                        # condition 3 SIZE >100000 x VELOCITY
+                        elif (feature['AREA'] >= 100000) and (feature['V_MEAN_ABS'] >= 0 and feature['V_MEAN_ABS'] < 16):
+                            feature['MAGNITUDE'] = 2
+                        elif (feature['AREA'] >= 100000) and (feature['V_MEAN_ABS'] >= 16 and feature['V_MEAN_ABS'] < 32):
+                            feature['MAGNITUDE'] = 3
+                        elif (feature['AREA'] >= 100000) and (feature['V_MEAN_ABS'] >= 32):
+                            feature['MAGNITUDE'] = 3
+                    elif (feature['TS_CLASS'] == 1 and (processos.find('LAN') != -1 or processos.find('SIN')!= -1)):
+                    #aplica-se a matriz 1
+                    #else:
+                    # condition 1 SIZE 0-10000 x VELOCITY
+                        if (feature['AREA'] >= 0 and feature['AREA'] < 10000) and (feature['V_MEAN_ABS'] >= 0 and feature['V_MEAN_ABS'] < 16):
+                            feature['MAGNITUDE'] = 1
+                        elif (feature['AREA'] >= 0 and feature['AREA'] < 10000) and (feature['V_MEAN_ABS'] >= 16 and feature['V_MEAN_ABS'] < 32):
+                            feature['MAGNITUDE'] = 2
+                        elif (feature['AREA'] >= 0 and feature['AREA'] < 10000) and (feature['V_MEAN_ABS'] >= 32):
+                            feature['MAGNITUDE'] = 2
+                        # condition 2 SIZE 10000-100000 x VELOCITY
+                        elif (feature['AREA'] >= 10000 and feature['AREA'] < 100000) and (feature['V_MEAN_ABS'] >= 0 and feature['V_MEAN_ABS'] < 16):
+                            feature['MAGNITUDE'] = 1
+                        elif (feature['AREA'] >= 10000 and feature['AREA'] < 100000) and (feature['V_MEAN_ABS'] >= 16 and feature['V_MEAN_ABS'] < 32):
+                            feature['MAGNITUDE'] = 2
+                        elif (feature['AREA'] >= 10000 and feature['AREA'] < 100000) and (feature['V_MEAN_ABS'] >= 32):
+                            feature['MAGNITUDE'] = 3
+                        # condition 3 SIZE >100000 x VELOCITY
+                        elif (feature['AREA'] >= 100000) and (feature['V_MEAN_ABS'] >= 0 and feature['V_MEAN_ABS'] < 16):
+                            feature['MAGNITUDE'] = 2
+                        elif (feature['AREA'] >= 100000) and (feature['V_MEAN_ABS'] >= 16 and feature['V_MEAN_ABS'] < 32):
+                            feature['MAGNITUDE'] = 3
+                        elif (feature['AREA'] >= 100000) and (feature['V_MEAN_ABS'] >= 32):
+                            feature['MAGNITUDE'] = 3
+                    elif (feature['TS_CLASS'] == 1 and (processos.find('LAN') == -1 or processos.find('SIN')== -1)):
+                    #aplica-se a matriz 3
+                    #else:
+                    # condition 1 SIZE 0-10000 x VELOCITY
+                        if (feature['AREA'] >= 0 and feature['AREA'] < 10000) and (feature['V_MEAN_ABS'] >= 0 and feature['V_MEAN_ABS'] < 16):
+                            feature['MAGNITUDE'] = 1
+                        elif (feature['AREA'] >= 0 and feature['AREA'] < 10000) and (feature['V_MEAN_ABS'] >= 16 and feature['V_MEAN_ABS'] < 32):
+                            feature['MAGNITUDE'] = 1
+                        elif (feature['AREA'] >= 0 and feature['AREA'] < 10000) and (feature['V_MEAN_ABS'] >= 32):
+                            feature['MAGNITUDE'] = 2
+                        # condition 2 SIZE 10000-100000 x VELOCITY
+                        elif (feature['AREA'] >= 10000 and feature['AREA'] < 100000) and (feature['V_MEAN_ABS'] >= 0 and feature['V_MEAN_ABS'] < 16):
+                            feature['MAGNITUDE'] = 1
+                        elif (feature['AREA'] >= 10000 and feature['AREA'] < 100000) and (feature['V_MEAN_ABS'] >= 16 and feature['V_MEAN_ABS'] < 32):
+                            feature['MAGNITUDE'] = 1
+                        elif (feature['AREA'] >= 10000 and feature['AREA'] < 100000) and (feature['V_MEAN_ABS'] >= 32):
+                            feature['MAGNITUDE'] = 2
+                        # condition 3 SIZE >100000 x VELOCITY
+                        elif (feature['AREA'] >= 100000) and (feature['V_MEAN_ABS'] >= 0 and feature['V_MEAN_ABS'] < 16):
+                            feature['MAGNITUDE'] = 1
+                        elif (feature['AREA'] >= 100000) and (feature['V_MEAN_ABS'] >= 16 and feature['V_MEAN_ABS'] < 32):
+                            feature['MAGNITUDE'] = 2
+                        elif (feature['AREA'] >= 100000) and (feature['V_MEAN_ABS'] >= 32):
+                            feature['MAGNITUDE'] = 2                    
                     # update feature values
                     layer.updateFeature(feature)
             self.dlg.progressBar.setValue(75)
@@ -529,9 +744,12 @@ class rastool:
                     # update feature values
                     layer.updateFeature(feature)
             self.dlg.progressBar.setValue(90)        
-        adaLayer.loadNamedStyle(QgsApplication.qgisSettingsDirPath()+'python/plugins/rastool/impact.qml')
-        adaLayer.triggerRepaint()
-        self.dlg.progressBar.setValue(90) 
+        
+        self.gravar(adaLayer)#Save Impact output layer        
+        
+        #adaLayer.loadNamedStyle(QgsApplication.qgisSettingsDirPath()+'python/plugins/rastool/impact.qml')
+        #adaLayer.triggerRepaint()
+        self.dlg.progressBar.setValue(100) 
             #pass
             
             

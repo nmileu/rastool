@@ -143,7 +143,7 @@
       <string>ADA polygon layer</string>
      </property>
     </widget>
-    <widget class="QgsFileWidget" name="mQgsFileWidget">
+    <widget class="QgsFileWidget" name="output">
      <property name="geometry">
       <rect>
        <x>10</x>
@@ -264,6 +264,81 @@
       </rect>
      </property>
     </widget>
+    <widget class="QLabel" name="label_9">
+     <property name="geometry">
+      <rect>
+       <x>220</x>
+       <y>10</y>
+       <width>341</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>12</pointsize>
+       <weight>50</weight>
+       <bold>false</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>ADA | POTENTIAL IMPACT ASSESSMENT</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_10">
+     <property name="geometry">
+      <rect>
+       <x>412</x>
+       <y>259</y>
+       <width>231</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Critical exposed elements vector layer</string>
+     </property>
+    </widget>
+    <widget class="QComboBox" name="criticalcomboBox">
+     <property name="geometry">
+      <rect>
+       <x>410</x>
+       <y>280</y>
+       <width>311</width>
+       <height>22</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QLabel" name="RASlogo">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>10</y>
+       <width>121</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+     <property name="scaledContents">
+      <bool>false</bool>
+     </property>
+    </widget>
+    <widget class="QLabel" name="Impactlogo">
+     <property name="geometry">
+      <rect>
+       <x>680</x>
+       <y>10</y>
+       <width>41</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+     <property name="scaledContents">
+      <bool>false</bool>
+     </property>
+    </widget>
    </widget>
    <widget class="QWidget" name="tab_2">
     <attribute name="title">
@@ -312,6 +387,7 @@ p, li { white-space: pre-wrap; }
    <header>qgsfilewidget.h</header>
   </customwidget>
  </customwidgets>
+ <resources/>
  <connections>
   <connection>
    <sender>button_box</sender>
