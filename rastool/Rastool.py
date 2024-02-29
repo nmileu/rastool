@@ -28,6 +28,7 @@ from qgis.PyQt.QtWidgets import QAction
 from PyQt5.QtWidgets import QMessageBox
 from qgis.PyQt.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QFileDialog, QDockWidget
 from qgis.PyQt.QtGui import QPixmap
+from qgis.utils import iface
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -73,6 +74,7 @@ class rastool:
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
+               
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -269,68 +271,6 @@ class rastool:
         joinObject.setJoinLayer(input)
         target.addJoin(joinObject)
 
-    def gravar(self,adaLayer):
-        #print(self.dlg.output.filePath())
-        if self.dlg.output.filePath() != '':
-
-            import os
-            if os.path.exists(self.dlg.output.filePath()):
-
-                #shape = self.dlg.layerComboBox.currentLayer()
-                shape = adaLayer
-                print (shape)
-                ruta = self.dlg.output.filePath()
-                options = QgsVectorFileWriter.SaveVectorOptions()
-                options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteFile
-                options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteLayer
-                options.actionOnExistingFile = QgsVectorFileWriter.AppendToLayerNoNewFields  
-                #options.shape = "_".join(shape.name().split(' '))
-                writer = QgsVectorFileWriter.writeAsVectorFormat(shape,ruta,options)
-                layer = QgsVectorLayer(ruta, os.path.basename(ruta), "ogr")
-                provider = layer.dataProvider()
-                print (provider)
-                field_ids = []
-                # Fieldnames to keep
-                fieldnames = set(['ADA_ID','EXPOSITION','MAGNITUDE','IMPACT'])
-                for field in layer.fields():
-                    print (field.name())
-                    if field.name() not in fieldnames:
-                      field_ids.append(layer.fields().indexFromName(field.name()))
-
-                # Delete the fields in the attribute table through their corresponding index 
-                # in the list.
-                layer.dataProvider().deleteAttributes(field_ids)
-                layer.updateFields()
-                
-                # Add impact output layer to project
-                QgsProject.instance().addMapLayer(layer)
-                layer.loadNamedStyle(QgsApplication.qgisSettingsDirPath()+'python/plugins/rastool/impact.qml')
-                layer.triggerRepaint()           
-            else:
-                shape = adaLayer
-                print ('Escreveu via else')
-                ruta = self.dlg.output.filePath()
-                writer = QgsVectorFileWriter.writeAsVectorFormat(shape,ruta,"UTF-8",shape.crs(),driverName="ESRI Shapefile")
-                layer = QgsVectorLayer(ruta, os.path.basename(ruta), "ogr")
-                provider = layer.dataProvider()
-                field_ids = []
-                # Fieldnames to keep
-                fieldnames = set(['ADA_ID','EXPOSITION','MAGNITUDE','IMPACT'])
-                for field in layer.fields():
-                    print (field.name())
-                    if field.name() not in fieldnames:
-                      field_ids.append(layer.fields().indexFromName(field.name()))
- 
-                # Delete the fields in the attribute table through their corresponding index 
-                # in the list.
-                layer.dataProvider().deleteAttributes(field_ids)
-                layer.updateFields()
-                
-                # Add impact output layer to project
-                QgsProject.instance().addMapLayer(layer)
-                layer.loadNamedStyle(QgsApplication.qgisSettingsDirPath()+'python/plugins/rastool/impact.qml')
-                layer.triggerRepaint()
-
 #1 PROCESS MAGNITUDE (ADA Size_Velocity_Temporal trend)
 #1 Temporal trend linear (negative; positive)           
     #def calculaMagnitude1(self):
@@ -417,8 +357,7 @@ class rastool:
                 self.tr("No polygon layer in actual project"),
                 level=Qgis.Warning)
             return 
-
-        
+       
         self.dlg.output.setStorageMode(self.dlg.output.SaveFile)
         self.dlg.output.setConfirmOverwrite(True)
         self.dlg.output.setFilter(self.tr("ESRI Shapefile (*.shp *.SHP)"))
@@ -460,14 +399,14 @@ class rastool:
                 'COLUMN_PREFIX': 'P_', 'STATS': [1]
                 }
             result1 = processing.run("qgis:zonalstatistics", params1)
-            self.dlg.progressBar.setValue(12)
+            #self.dlg.progressBar.setValue(12)
             # Calculate buidings for each ADA.
             #print (buildingsLayer.dataProvider().dataSourceUri())
             params2 = {'INPUT_RASTER': buildingsLayer.dataProvider().dataSourceUri(),
                 'RASTER_BAND': 1, 'INPUT_VECTOR': adaLayer.source(),
                 'COLUMN_PREFIX': 'B_', 'STATS': [1]
                 }
-            self.dlg.progressBar.setValue(25)
+            #self.dlg.progressBar.setValue(25)
             result2 = processing.run("qgis:zonalstatistics", params2)            
 
             params3 = {'LINES':roadsLayer.source(),
@@ -475,7 +414,7 @@ class rastool:
                 'LEN_FIELD':'LENROAD','COUNT_FIELD':'COUNTROAD','OUTPUT':'memory:{}'.format('roadssumcount')
                 }           
             result3 = processing.run("qgis:sumlinelengths", params3)
-            self.dlg.progressBar.setValue(37)
+            #self.dlg.progressBar.setValue(37)
             sumlinelengths1 = result3['OUTPUT']
             QgsProject.instance().addMapLayer(sumlinelengths1)
             self.joinadaroads(adaLayer,sumlinelengths1)#PErforms join adaLayer.ID with roadssumcount.ID
@@ -484,7 +423,7 @@ class rastool:
                 'LEN_FIELD':'LENRAIL','COUNT_FIELD':'COUNTRAIL','OUTPUT':'memory:{}'.format('railsumcount')
                 }           
             result4 = processing.run("qgis:sumlinelengths", params4)
-            self.dlg.progressBar.setValue(50)
+            #self.dlg.progressBar.setValue(50)
             sumlinelengths2 = result4['OUTPUT']
             QgsProject.instance().addMapLayer(sumlinelengths2)
             self.joinadarailway(adaLayer,sumlinelengths2)#Performs join adaLayer.ID with railsumcount.ID
@@ -522,6 +461,7 @@ class rastool:
 
             #Calculate exposition, process magnitude and impact
             layer = adaLayer
+            count = layer.featureCount()
             with edit(layer): # open edti sessio for the layer
                 for feature in layer.getFeatures():
                     #Check none values from critical exposed elements intersection and converts them to zero or one
@@ -576,7 +516,8 @@ class rastool:
                         feature['EXPOSITION'] = 3       
                     # update feature values
                     layer.updateFeature(feature)
-            self.dlg.progressBar.setValue(62)
+                    iface.messageBar().pushMessage("Info", "Exposition calculation number of features: {}".format(int(count)), duration=3000)
+            #self.dlg.progressBar.setValue(62)
             #Check for existing MAGNITUDE field | add or delete MAGNITUDE field
             field_name = "MAGNITUDE"
             layer = adaLayer # Gives you the ADA layer
@@ -598,6 +539,7 @@ class rastool:
                 layer.updateFields()
             
             # Calculate process magnitude
+            count = layer.featureCount()
             with edit(layer): # open edti sessio for the layer
                 for feature in layer.getFeatures():
                     processos = str(feature['PROCESSES'])
@@ -699,7 +641,8 @@ class rastool:
                             feature['MAGNITUDE'] = 2                    
                     # update feature values
                     layer.updateFeature(feature)
-            self.dlg.progressBar.setValue(75)
+                    iface.messageBar().pushMessage("Info", "Magnitude calculation number of features: {}".format(int(count)), duration=3000)
+            #self.dlg.progressBar.setValue(75)
             #Check for existing IMPACT field | add or delete IMPACT field
             field_name = "IMPACT"
             layer = adaLayer # Gives you the ADA layer
@@ -720,8 +663,13 @@ class rastool:
                 layer.updateFields()
 
             # Calculate the potential impact
+            count = layer.featureCount()
             with edit(layer): # open edti sessio for the layer
-                for feature in layer.getFeatures():
+                for i, feature in enumerate(layer.getFeatures()):
+                    print("Feature ID:", i)
+                    percent = i / float(count) * 100
+                    #iface.messageBar().pushMessage("Impact features processed {} %".format(int(percent)))
+                    #self.dlg.progressBar.setValue(percent)
                     # potential impact assessment
                     if (feature['EXPOSITION'] == 1 and feature['MAGNITUDE'] == 1):
                         feature['IMPACT'] = 1
@@ -743,13 +691,88 @@ class rastool:
                         feature['IMPACT'] = 3
                     # update feature values
                     layer.updateFeature(feature)
-            self.dlg.progressBar.setValue(90)        
+                    iface.messageBar().pushMessage("Info", "Impact calculation number of features: {}".format(int(count)), duration=3000)
+            #self.dlg.progressBar.setValue(90)        
         
         self.gravar(adaLayer)#Save Impact output layer        
         
         #adaLayer.loadNamedStyle(QgsApplication.qgisSettingsDirPath()+'python/plugins/rastool/impact.qml')
         #adaLayer.triggerRepaint()
-        self.dlg.progressBar.setValue(100) 
-            #pass
+        #self.dlg.progressBar.setValue(100) 
+        #pass
+
+    def gravar(self,adaLayer):
+        #print(self.dlg.output.filePath())
+        if self.dlg.output.filePath() != '':
+
+            import os
+            if os.path.exists(self.dlg.output.filePath()):
+
+                #shape = self.dlg.layerComboBox.currentLayer()
+                shape = adaLayer
+                print (shape)
+                ruta = self.dlg.output.filePath()
+                options = QgsVectorFileWriter.SaveVectorOptions()
+                options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteFile
+                options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteLayer
+                options.actionOnExistingFile = QgsVectorFileWriter.AppendToLayerNoNewFields  
+                #options.shape = "_".join(shape.name().split(' '))
+                writer = QgsVectorFileWriter.writeAsVectorFormat(shape,ruta,options)
+                layer = QgsVectorLayer(ruta, os.path.basename(ruta), "ogr")
+                provider = layer.dataProvider()
+                print (provider)
+                field_ids = []
+                # Fieldnames to keep
+                fieldnames = set(['ADA_ID','EXPOSITION','MAGNITUDE','IMPACT'])
+                for field in layer.fields():
+                    print (field.name())
+                    if field.name() not in fieldnames:
+                      field_ids.append(layer.fields().indexFromName(field.name()))
+
+                # Delete the fields in the attribute table through their corresponding index 
+                # in the list.
+                layer.dataProvider().deleteAttributes(field_ids)
+                layer.updateFields()
+                
+                # Add impact output layer to project
+                QgsProject.instance().addMapLayer(layer)
+                layer.loadNamedStyle(QgsApplication.qgisSettingsDirPath()+'python/plugins/rastool/impact.qml')
+                layer.triggerRepaint()           
+            else:
+                shape = adaLayer
+                print (shape)
+                print ('Escreveu via else')
+                id_col_EXPOSITION = shape.dataProvider().fieldNameIndex("EXPOSITION")
+                id_col_MAGNITUDE = shape.dataProvider().fieldNameIndex("MAGNITUDE")
+                id_col_IMPACT = shape.dataProvider().fieldNameIndex("IMPACT")
+                ruta = self.dlg.output.filePath()                               
+                writer = QgsVectorFileWriter.writeAsVectorFormat(shape,ruta,"UTF-8",shape.crs(),driverName="ESRI Shapefile", attributes = [0, id_col_EXPOSITION, id_col_MAGNITUDE, id_col_IMPACT])
+                print (writer)
+                layer = QgsVectorLayer(ruta, os.path.basename(ruta), "ogr")
+                print (layer)
+                provider = layer.dataProvider()
+                print (provider)
+                field_ids = []
+                # Fieldnames to keep
+                fieldnames = set(['ADA_ID','EXPOSITION','MAGNITUDE','IMPACT'])
+                for field in layer.fields():
+                    #print (field.name())
+                    if field.name() not in fieldnames:
+                      field_ids.append(layer.fields().indexFromName(field.name()))
+ 
+                # Delete the fields in the attribute table through their corresponding index 
+                # in the list.
+                layer.dataProvider().deleteAttributes(field_ids)
+                layer.updateFields()
+                
+                # Add impact output layer to project
+                QgsProject.instance().addMapLayer(layer)
+                layer.loadNamedStyle(QgsApplication.qgisSettingsDirPath()+'python/plugins/rastool/impact.qml')
+                layer.triggerRepaint()
+                
+                # Show Feature Count
+                root = QgsProject.instance().layerTreeRoot()
+                myLayerNode = root.findLayer(layer)
+                myLayerNode.setCustomProperty("showFeatureCount", True)
             
             

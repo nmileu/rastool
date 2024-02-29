@@ -10,6 +10,12 @@
     <height>500</height>
    </rect>
   </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
   <property name="minimumSize">
    <size>
     <width>800</width>
@@ -31,7 +37,7 @@
      <x>10</x>
      <y>10</y>
      <width>781</width>
-     <height>481</height>
+     <height>461</height>
     </rect>
    </property>
    <property name="currentIndex">
@@ -44,9 +50,9 @@
     <widget class="QDialogButtonBox" name="button_box">
      <property name="geometry">
       <rect>
-       <x>380</x>
+       <x>390</x>
        <y>390</y>
-       <width>341</width>
+       <width>331</width>
        <height>32</height>
       </rect>
      </property>
@@ -115,19 +121,6 @@
      </property>
      <property name="text">
       <string>Input Exposure Layers</string>
-     </property>
-    </widget>
-    <widget class="QProgressBar" name="progressBar">
-     <property name="geometry">
-      <rect>
-       <x>7</x>
-       <y>423</y>
-       <width>751</width>
-       <height>20</height>
-      </rect>
-     </property>
-     <property name="value">
-      <number>0</number>
      </property>
     </widget>
     <widget class="QLabel" name="label">
@@ -337,6 +330,32 @@
      </property>
      <property name="scaledContents">
       <bool>false</bool>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="Execute">
+     <property name="geometry">
+      <rect>
+       <x>120</x>
+       <y>380</y>
+       <width>75</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Execute</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="Cancel">
+     <property name="geometry">
+      <rect>
+       <x>40</x>
+       <y>380</y>
+       <width>75</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Cancel</string>
      </property>
     </widget>
    </widget>
